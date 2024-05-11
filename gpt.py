@@ -1,162 +1,125 @@
+import OpenSSL.crypto
+import requests
+import os
+import OpenSSL.crypto
 from cryptography import x509
-from cryptography.x509.oid import NameOID
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.backends import default_backend
-from PyPDF2 import PdfReader
-import datetime
-import asn1crypto.cms
-import asn1crypto.x509
+from cryptography.x509.oid import ExtensionOID
 
-# Генерация сертификата
-def generate_certificate(common_name, country, state, locality, organization, email):
-    key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-        backend=default_backend()
-    )
+def load_certificate(cert_path):
+    with open(cert_path, 'rb') as file:
+        cert_content = file.read()
     
-    subject = issuer = x509.Name([
-        x509.NameAttribute(NameOID.COUNTRY_NAME, country),
-        x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, state),
-        x509.NameAttribute(NameOID.LOCALITY_NAME, locality),
-        x509.NameAttribute(NameOID.ORGANIZATION_NAME, organization),
-        x509.NameAttribute(NameOID.COMMON_NAME, common_name),
-        x509.NameAttribute(NameOID.EMAIL_ADDRESS, email),
-    ])
-    
-    cert = x509.CertificateBuilder().subject_name(
-        subject
-    ).issuer_name(
-        issuer
-    ).public_key(
-        key.public_key()
-    ).serial_number(
-        x509.random_serial_number()
-    ).not_valid_before(
-        datetime.datetime.utcnow()
-    ).not_valid_after(
-        # Сертификат действителен 1 год
-        datetime.datetime.utcnow() + datetime.timedelta(days=365)
-    ).add_extension(
-        x509.SubjectAlternativeName([x509.DNSName(common_name)]),
-        critical=False
-    ).sign(key, hashes.SHA256(), default_backend())
-    
-    return cert, key
+    # Определяем тип файла по содержимому
+    try:
+        return OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_PEM, cert_content)
+    except OpenSSL.crypto.Error:
+        # Если не удалось загрузить как PEM, пробуем как DER
+        return OpenSSL.crypto.load_certificate(OpenSSL.crypto.FILETYPE_ASN1, cert_content)
 
-# Чтение данных PDF файла
-def read_pdf_data(pdf_path):
-    with open(pdf_path, 'rb') as f:
-        reader = PdfReader(f)
-        pdf_data = ''.join(page.extract_text() for page in reader.pages)
-    return pdf_data.encode('utf-8')
+def get_crl_distribution_urls(certificate_path):
 
-# Подписывание данных с использованием RSA
-def sign_data(data, private_key):
-    signature = private_key.sign(
-        data,
-        padding.PKCS1v15(),
-        hashes.SHA256()
-    )
-    return signature
+    # Загрузите сертификат (предполагается, что у вас есть файл сертификата в формате PEM)
+    with open(certificate_path, "rb") as cert_file:
+        cert_data = cert_file.read()
+        certificate = x509.load_pem_x509_certificate(cert_data, default_backend())
 
-# Создание PKCS #7 контейнера
-def create_pkcs7(cert, key, data):
-    # Создаем подпись с использованием приватного ключа
-    signed_data = sign_data(data, key)
-    
-    # Преобразуем сертификат в ASN.1 формат
-    cert_asn1 = asn1crypto.x509.Certificate.load(cert.public_bytes(serialization.Encoding.DER))
-    
-    # Рассчитываем хэш данных
-    hash_obj = hashes.Hash(hashes.SHA256(), default_backend())
-    hash_obj.update(data)
-    digest = hash_obj.finalize()
-    
-    # Создаем информацию о подписчике
-    signer_info = asn1crypto.cms.SignerInfo({
-        'version': 'v1',
-        'sid': asn1crypto.cms.SignerIdentifier({
-            'issuer_and_serial_number': asn1crypto.cms.IssuerAndSerialNumber({
-                'issuer': cert_asn1.issuer,
-                'serial_number': cert_asn1.serial_number
-            })
-        }),
-        'digest_algorithm': {'algorithm': 'sha256'},
-        'signed_attrs': asn1crypto.cms.CMSAttributes([
-            {'type': 'content_type', 'values': ['data']},
-            {'type': 'message_digest', 'values': [digest]},
-        ]),
-        'signature_algorithm': {'algorithm': 'rsassa_pkcs1v15'},
-        'signature': signed_data
-    })
-    
-    # Создаем SignedData структуру
-    signed_data = asn1crypto.cms.SignedData({
-        'version': 'v1',
-        'digest_algorithms': [{'algorithm': 'sha256'}],
-        'encap_content_info': {'content_type': 'data', 'content': data},
-        'certificates': [cert_asn1],
-        'signer_infos': [signer_info]
-    })
-    
-    # Создаем ContentInfo структуру
-    content_info = asn1crypto.cms.ContentInfo({
-        'content_type': 'signed_data',
-        'content': signed_data
-    })
-    
-    return content_info.dump()
+    # Словарь для хранения данных CRL Distribution Points
+    crl_distribution_data = []
 
-# Сохранение PKCS #7 файла
-def save_pkcs7_file(output_path, pkcs7_data):
-    with open(output_path, 'wb') as f:
-        f.write(pkcs7_data)
+    # Попытка извлечь расширение CRL Distribution Points
+    try:
+        crl_distribution_points = certificate.extensions.get_extension_for_oid(
+            ExtensionOID.CRL_DISTRIBUTION_POINTS
+        )
+        distribution_points = crl_distribution_points.value
 
-# Экспорт сертификата и ключа в файлы PEM
-def export_certificate_and_key(cert, key, cert_path, key_path, key_password=None):
-    with open(cert_path, 'wb') as cert_file:
-        cert_file.write(cert.public_bytes(serialization.Encoding.PEM))
-    
-    encryption_algorithm = serialization.BestAvailableEncryption(key_password) if key_password else serialization.NoEncryption()
-    
-    with open(key_path, 'wb') as key_file:
-        key_file.write(key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=encryption_algorithm
-        ))
+        # Извлечение информации о каждой точке распространения CRL
+        for dp in distribution_points:
+            dp_info = {}
+            if dp.full_name:
+                dp_info['URLs'] = [name.value for name in dp.full_name]
+            if dp.relative_name:
+                dp_info['Relative Name'] = dp.relative_name.rfc4514_string()
+            if dp.reasons:
+                dp_info['Reasons'] = dp.reasons
+            if dp.crl_issuer:
+                dp_info['CRL Issuer'] = [issuer.rfc4514_string() for issuer in dp.crl_issuer]
+            crl_distribution_data.append(dp_info)
 
-# Основная функция
-def main(pdf_path, output_path, cert_info, cert_export_path, key_export_path, key_password=None):
-    cert, key = generate_certificate(
-        common_name=cert_info['common_name'],
-        country=cert_info['country'],
-        state=cert_info['state'],
-        locality=cert_info['locality'],
-        organization=cert_info['organization'],
-        email=cert_info['email']
-    )
-    pdf_data = read_pdf_data(pdf_path)
-    pkcs7_data = create_pkcs7(cert, key, pdf_data)
-    save_pkcs7_file(output_path, pkcs7_data)
-    export_certificate_and_key(cert, key, cert_export_path, key_export_path, key_password)
+    except x509.ExtensionNotFound:
+        print("CRL Distribution Points extension not found in this certificate.")
 
-# Пример вызова функции
-if __name__ == '__main__':
-    pdf_path = 'template.pdf'
-    output_path = 'signed_certificate.p7b'
-    cert_export_path = 'certificate.pem'
-    key_export_path = 'private_key.pem'
-    cert_info = {
-        'common_name': 'example.com',
-        'country': 'US',
-        'state': 'California',
-        'locality': 'San Francisco',
-        'organization': 'Example Inc.',
-        'email': 'info@example.com'
-    }
-    key_password = 'your_password'.encode('utf-8')  # Установите пароль для приватного ключа или оставьте как `None`
-    
-    main(pdf_path, output_path, cert_info, cert_export_path, key_export_path, key_password)
+    # Вывод словаря с данными CRL Distribution Points
+    return crl_distribution_data
+
+
+def download_crl(crl_url):
+    response = requests.get(crl_url)
+    if response.status_code == 200:
+        return OpenSSL.crypto.load_crl(OpenSSL.crypto.FILETYPE_ASN1, response.content)
+    else:
+        print(f"Failed to download CRL from {crl_url}")
+        return None
+
+def is_certificate_revoked(certificate, crl):
+    # Проверяем, есть ли сертификат в списке отозванных
+    revoked = crl.get_revoked()
+    if revoked:
+        cert_serial = certificate.get_serial_number()
+        for r in revoked:
+            if int(r.get_serial(), 16) == cert_serial:
+                return True
+    return False
+
+    from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+
+def der_to_pem(der_path, pem_path):
+    # Чтение сертификата в формате DER из файла
+    with open(der_path, "rb") as file:
+        der_data = file.read()
+        certificate = x509.load_der_x509_certificate(der_data, default_backend())
+
+    # Конвертация сертификата в формат PEM
+    pem_data = certificate.public_bytes(encoding=serialization.Encoding.PEM)
+
+    # Запись сертификата в формате PEM в файл
+    with open(pem_path, "wb") as file:
+        file.write(pem_data)
+    print(f"Certificate has been converted to PEM format and saved to {pem_path}")
+
+# Пример использования функции:
+
+
+# Загрузка сертификата
+cert_path = '/Users/ntcad/gitPrjs/pythonPKSC7/revoked.pem'
+certificate = load_certificate(cert_path)
+
+# Получение URL для загрузки CRL
+
+
+
+
+def main(cert_path):
+    crl_url = get_crl_distribution_urls(cert_path)
+    if crl_url:
+        # Загрузка CRL
+        for crl in crl_url:
+            crl = download_crl(crl['URLs'][0])
+            if crl:
+                # Проверка, отозван ли сертификат
+                if is_certificate_revoked(certificate, crl):
+                    print("Certificate is revoked.")
+                else:
+                    print("Certificate is not revoked.")
+    else:
+        print("No CRL distribution point found.")
+
+if cert_path.lower().endswith('.pem'):
+    main(cert_path)
+else: 
+    der_to_pem(cert_path, '/Users/ntcad/gitPrjs/pythonPKSC7/converted.pem')
+    main('/Users/ntcad/gitPrjs/pythonPKSC7/converted.pem')
+
