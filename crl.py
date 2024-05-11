@@ -2,9 +2,10 @@ import OpenSSL.crypto
 import requests
 import os
 import OpenSSL.crypto
+from cryptography.x509.oid import ExtensionOID
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.x509.oid import ExtensionOID
+from cryptography.hazmat.primitives import serialization
 
 def load_certificate(cert_path):
     with open(cert_path, 'rb') as file:
@@ -72,10 +73,6 @@ def is_certificate_revoked(certificate, crl):
                 return True
     return False
 
-    from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-
 def der_to_pem(der_path, pem_path):
     # Чтение сертификата в формате DER из файла
     with open(der_path, "rb") as file:
@@ -90,19 +87,9 @@ def der_to_pem(der_path, pem_path):
         file.write(pem_data)
     print(f"Certificate has been converted to PEM format and saved to {pem_path}")
 
-# Пример использования функции:
 
-
-# Загрузка сертификата
-cert_path = '/Users/ntcad/gitPrjs/pythonPKSC7/revoked.pem'
-certificate = load_certificate(cert_path)
-
-# Получение URL для загрузки CRL
-
-
-
-
-def main(cert_path):
+def runParsing(cert_path):
+    certificate = load_certificate(cert_path)
     crl_url = get_crl_distribution_urls(cert_path)
     if crl_url:
         # Загрузка CRL
@@ -117,9 +104,11 @@ def main(cert_path):
     else:
         print("No CRL distribution point found.")
 
-if cert_path.lower().endswith('.pem'):
-    main(cert_path)
-else: 
-    der_to_pem(cert_path, '/Users/ntcad/gitPrjs/pythonPKSC7/converted.pem')
-    main('/Users/ntcad/gitPrjs/pythonPKSC7/converted.pem')
+
+def getCRLInfo(cert_path):
+    if cert_path.lower().endswith('.pem'):
+        runParsing(cert_path)
+    else: 
+        der_to_pem(cert_path, '/Users/ntcad/gitPrjs/pythonPKSC7/converted.pem')
+        runParsing('/Users/ntcad/gitPrjs/pythonPKSC7/converted.pem')
 
