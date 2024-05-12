@@ -1,3 +1,5 @@
-docker build -t pkcs_server pythonPKSC7    
+Запускать из дирректории выше по уровню 
+
+docker build -t pkcs_server <путь к папке>  
 
 docker run -p 8000:8000 -it pkcs_server 
