@@ -101,16 +101,16 @@ def runParsing(cert_path):
             if crl:
                 # Проверка, отозван ли сертификат
                 if is_certificate_revoked(certificate, crl):
-                    return False
+                    return '001'
                 else:
-                    return True
+                    return '002'
     else:
-        return False
+        return '003'
 
 
 def getCRLInfo(cert_path):
     if cert_path.lower().endswith('.pem'):
         return runParsing(cert_path)
     else:
-        der_to_pem(cert_path, '/Users/ntcad/gitPrjs/pythonPKSC7/converted.pem')
-        return runParsing('/Users/ntcad/gitPrjs/pythonPKSC7/converted.pem')
+        der_to_pem(cert_path, 'converted.pem')
+        return runParsing('converted.pem')

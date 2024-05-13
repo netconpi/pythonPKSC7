@@ -17,10 +17,15 @@ async def create_upload_files(files: List[UploadFile] = File(...)):
         with open(file_path, 'wb') as f:
             f.write(contents)
 
-        if getCRLInfo(file_path):
-            return {"message": f"Not revoked"}
-        else:
-            return {"message": f"revoked"}
+        match (getCRLInfo(file_path)):
+            case '001':
+                return {"message": f"Revoked"}
+            case '002':
+                return {"message": f"Ok"}
+            case '003':
+                return {"message": f"CRL Extension Not Found"}
+            case _:
+                return {"message": f"Error. Check the data"}
 
 
 @app.post("/checkCert/")

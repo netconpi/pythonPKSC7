@@ -40,3 +40,12 @@ fetch("http://0.0.0.0:8000/validateCRL/", requestOptions)
     .then((result) => console.log(result))
     .catch((error) => console.error(error));
 '''
+
+Ответы:
+
+(строки)
+
+1. Revoked -> отозван
+2. Ok -> все хорошо
+3. CRL Extension Not Found -> нет CRL
+4. Error. Check the data -> ошибка в переданных данных 
