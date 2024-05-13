@@ -9,5 +9,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 EXPOSE 8000
-# Задаем команду для запуска приложения
+
 CMD ["python", "main.py"]

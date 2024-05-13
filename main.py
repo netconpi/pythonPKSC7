@@ -1,11 +1,9 @@
-
 # PKCS7
 from crl import getCRLInfo
 from bash import verify_signature
 from fastapi import FastAPI, File, UploadFile
 from typing import List
 import os
-from pathlib import Path
 import shutil
 
 app = FastAPI()
@@ -18,17 +16,17 @@ async def create_upload_files(files: List[UploadFile] = File(...)):
         file_path = f'uploaded_files/{file.filename}'
         with open(file_path, 'wb') as f:
             f.write(contents)
-        
 
         if getCRLInfo(file_path):
             return {"message": f"Not revoked"}
         else:
             return {"message": f"revoked"}
 
+
 @app.post("/checkCert/")
 async def upload_files(signed_file: UploadFile = File(...),
-                        root_certificate: UploadFile = File(...),
-                        content_file: UploadFile = File(...)):
+                       root_certificate: UploadFile = File(...),
+                       content_file: UploadFile = File(...)):
     """
     Uploads three files and returns a dictionary of their paths.
     """
@@ -43,6 +41,7 @@ async def upload_files(signed_file: UploadFile = File(...),
 
     return verify_signature(paths['signed_file'], paths['root_certificate'], paths['content_file'])
 
+
 def save_upload_file(upload_file, directory):
     try:
         directory += '/'
@@ -53,10 +52,13 @@ def save_upload_file(upload_file, directory):
     finally:
         upload_file.file.close()
 
-def main(): 
+
+def main():
     os.makedirs('uploaded_files', exist_ok=True)
+
 
 if __name__ == '__main__':
     import uvicorn
+
     main()
     uvicorn.run(app, host="0.0.0.0", port=8000)

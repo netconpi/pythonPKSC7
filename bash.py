@@ -1,5 +1,6 @@
 import subprocess
 
+
 def verify_signature(signed_file, root_certificate, content_file):
     """
     Verifies a PKCS#7 signed file using OpenSSL.
