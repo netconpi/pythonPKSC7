@@ -1,4 +1,6 @@
-# Запускать из дирректории выше по уровню 
+# PKCS7: basic validation
+
+## build project:
 
 ```commandline
 docker build -t pkcs_server <путь к папке>  
