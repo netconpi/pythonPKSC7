@@ -1,4 +1,4 @@
-Запускать из дирректории выше по уровню 
+# Запускать из дирректории выше по уровню 
 
 ```commandline
 docker build -t pkcs_server <путь к папке>  
@@ -9,7 +9,7 @@ docker run -p 8000:8000 -it pkcs_server
 ```
 
 
-/1 checkCert
+### /1 checkCert
 ```js
 const formdata = new FormData();
 formdata.append("signed_file", fileInput.files[0], "converted.pem");
@@ -47,7 +47,7 @@ Examples of output:
 }
 ```
 
-/2 validateCRL
+### /2 validateCRL
 ```js
 const formdata = new FormData();
 formdata.append("files", fileInput.files[0], "converted.pem");
