@@ -27,6 +27,12 @@ async def create_upload_files(files: List[UploadFile] = File(...)):
             case _:
                 return {"message": f"Error. Check the data"}
 
+# Проверка вложенной PKCS#7 подписи
+# openssl smime -verify -in message_signed.p7m -CAfile rootCA.pem -inform PEM
+
+# Проверка отсоединенной PKCS#7 подписи
+# openssl smime -verify -in message_signed_detached.p7s -CAfile rootCA.pem -inform PEM -content message.txt -out verified_message.txt
+
 
 @app.post("/checkCert/")
 async def upload_files(signed_file: UploadFile = File(...),

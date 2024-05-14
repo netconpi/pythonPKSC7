@@ -6,7 +6,7 @@ docker run -p 8000:8000 -it pkcs_server
 
 
 /1 checkCert
-'''js
+```js
 const formdata = new FormData();
 formdata.append("signed_file", fileInput.files[0], "converted.pem");
 formdata.append("root_certificate", fileInput.files[0], "russiantrustedca.pem");
@@ -22,10 +22,29 @@ fetch("http://0.0.0.0:8000/checkCert/", requestOptions)
     .then((response) => response.text())
     .then((result) => console.log(result))
     .catch((error) => console.error(error));
-'''
+```
+
+Examples of output:
+
+```json
+{
+    "message": "Failed",
+    "executed": "openssl cms -verify -in uploaded_files/signedfile.p7m -CAfile uploaded_files/ca-chain.cert.pem -inform DER -content uploaded_files/testfile.txt -out verified.txt",
+    "path": "/Users/ntcad/gitPrjs/pythonPKSC7"
+}
+```
+
+```json
+{
+    "message": "Verified",
+    "std": "CMS Verification successful\n",
+    "executed": "openssl cms -verify -in uploaded_files/signedfile.p7m -CAfile uploaded_files/RootCA.pem -inform DER -content uploaded_files/testfile.txt -out verified.txt",
+    "path": "/Users/ntcad/gitPrjs/pythonPKSC7"
+}
+```
 
 /2 validateCRL
-'''js
+```js
 const formdata = new FormData();
 formdata.append("files", fileInput.files[0], "converted.pem");
 
@@ -39,11 +58,9 @@ fetch("http://0.0.0.0:8000/validateCRL/", requestOptions)
     .then((response) => response.text())
     .then((result) => console.log(result))
     .catch((error) => console.error(error));
-'''
+```
 
-Ответы:
-
-(строки)
+Ответы (строки):
 
 1. Revoked -> отозван
 2. Ok -> все хорошо
