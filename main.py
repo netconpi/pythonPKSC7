@@ -1,8 +1,8 @@
 # PKCS7
 from crl import getCRLInfo
-from bash import verify_signature
+from bash import verify_signature, verify_pkcs
 from fastapi import FastAPI, File, UploadFile
-from typing import List
+from typing import List, Optional
 import os
 import shutil
 
@@ -10,7 +10,7 @@ app = FastAPI()
 
 
 @app.post("/validateCRL/")
-async def create_upload_files(files: List[UploadFile] = File(...)):
+async def validate_crl(files: List[UploadFile] = File(...)):
     for file in files:
         contents = await file.read()
         file_path = f'uploaded_files/{file.filename}'
@@ -27,33 +27,47 @@ async def create_upload_files(files: List[UploadFile] = File(...)):
             case _:
                 return {"message": f"Error. Check the data"}
 
-# Проверка вложенной PKCS#7 подписи
-# openssl smime -verify -in message_signed.p7m -CAfile rootCA.pem -inform PEM
-
-# Проверка отсоединенной PKCS#7 подписи
-# openssl smime -verify -in message_signed_detached.p7s -CAfile rootCA.pem -inform PEM -content message.txt -out verified_message.txt
-
 
 @app.post("/checkCert/")
-async def upload_files(signed_file: UploadFile = File(...),
-                       root_certificate: UploadFile = File(...),
-                       content_file: UploadFile = File(...)):
+async def check_cert(signed_file: UploadFile = File(...),
+                     root_certificate: UploadFile = File(...),
+                     content_file: UploadFile = File(...)):
     """
     Uploads three files and returns a dictionary of their paths.
     """
-    save_dir = 'uploaded_files'
 
     # Saving the files
     paths = {
-        "signed_file": save_upload_file(signed_file, save_dir),
-        "root_certificate": save_upload_file(root_certificate, save_dir),
-        "content_file": save_upload_file(content_file, save_dir)
+        "signed_file": save_upload_file(signed_file),
+        "root_certificate": save_upload_file(root_certificate),
+        "content_file": save_upload_file(content_file)
     }
 
     return verify_signature(paths['signed_file'], paths['root_certificate'], paths['content_file'])
 
 
-def save_upload_file(upload_file, directory):
+@app.post("/verifyPKCS/")
+async def verify_pkcs7_signature(signed_file: UploadFile = File(...),
+                                 root_certificate: UploadFile = File(...),
+                                 content_file: Optional[UploadFile] = File(None)):
+    """
+    Endpoint to upload a signed file, CA certificate, and optionally a content file,
+    then verify the PKCS#7 signature.
+    """
+    paths = {
+        "signed_file": save_upload_file(signed_file),
+        "root_certificate": save_upload_file(root_certificate)
+    }
+
+    # For detached signatures, ensure content file is provided
+    if content_file:
+        paths["content_file"] = save_upload_file(content_file)
+        return verify_pkcs(paths['signed_file'], paths['root_certificate'], paths['content_file'])
+    else:
+        return verify_pkcs(paths['signed_file'], paths['root_certificate'])
+
+
+def save_upload_file(upload_file, directory='uploaded_files'):
     try:
         directory += '/'
         file_location = directory + upload_file.filename
